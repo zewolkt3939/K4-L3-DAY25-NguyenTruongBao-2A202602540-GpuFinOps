@@ -6,7 +6,7 @@ from __future__ import annotations
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 from missions._common import load_csv, num
-from finops import pricing
+from finops import pricing, extensions
 
 # $/1M tokens (input, output) — illustrative 2026.
 MODEL_PRICES = {"small": (0.20, 0.40), "large": (3.00, 15.00)}
@@ -31,6 +31,8 @@ def run(verbose: bool = True) -> dict:
     base_pm = pricing.dollars_per_million(base_cost, total_tokens)
     opt_pm = pricing.dollars_per_million(opt_cost, total_tokens)
     savings_pct = (1 - opt_cost / base_cost) * 100 if base_cost else 0.0
+    reasoning = extensions.reasoning_budget(rows, MODEL_PRICES)
+    reasoning_5pct = extensions.reasoning_budget(rows, MODEL_PRICES, cap=0.05)
 
     if verbose:
         print("== M2 Inference Cost Levers ==")
@@ -39,11 +41,16 @@ def run(verbose: bool = True) -> dict:
         print(f"optimized : ${opt_cost:,.2f}/day   ${opt_pm:.3f}/1M-token")
         print(f"savings   : {savings_pct:.1f}%  (cascade + caching + batch)")
         print(f"discount stack (batch + 100% cache): {pricing.discount_stack(batch=True, cache_hit_frac=1.0):.3f} of naive")
+        print(f"reasoning: {reasoning['traffic_pct']:.2f}% traffic, {reasoning['cost_pct']:.2f}% cost")
+        print(f"10% cap scenario: reroute {reasoning['rerouted']} requests; save ${reasoning['saved_usd']:.4f}/day and {reasoning['saved_wh']:.2f} Wh/day")
+        print(f"5% sensitivity: reroute {reasoning_5pct['rerouted']} requests; save ${reasoning_5pct['saved_usd']:.4f}/day and {reasoning_5pct['saved_wh']:.2f} Wh/day")
 
     return {
         "baseline_daily": round(base_cost, 2), "optimized_daily": round(opt_cost, 2),
         "baseline_per_m": round(base_pm, 3), "optimized_per_m": round(opt_pm, 3),
         "savings_pct": round(savings_pct, 1), "total_tokens": total_tokens,
+        "reasoning_budget": reasoning,
+        "reasoning_5pct": reasoning_5pct,
     }
 
 
